@@ -341,6 +341,117 @@ $$
 DELIMITER ;
 
 
+DELIMITER $$
+
+CREATE PROCEDURE UpdateSubcategoryBalances(IN subcategory_id INT)
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE trans_id INT;
+    DECLARE trans_amount DOUBLE;
+    DECLARE trans_currency VARCHAR(4);
+    DECLARE subcat_currency VARCHAR(4);
+    
+    -- Cursor para obtener las transacciones de la subcategoría
+    DECLARE cur CURSOR FOR
+        SELECT id, amount, currency
+        FROM transactions
+        WHERE subcategorie_id = subcategory_id;
+    
+    -- Declarar manejador para NOT FOUND
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    -- Obtener la divisa de la subcategoría
+    SELECT currency INTO subcat_currency
+    FROM subcategories
+    WHERE id = subcategory_id;
+    
+    -- Inicializar balance de subcategoría en 0
+    SET @subcategory_balance = 0;
+    
+    -- Abrir el cursor
+    OPEN cur;
+    
+    read_loop: LOOP
+        -- Obtener valores de la transacción
+        FETCH cur INTO trans_id, trans_amount, trans_currency;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        -- Convertir el monto de la transacción a la divisa de la subcategoría
+        CALL ConvertCurrency(trans_amount, trans_currency, subcat_currency, @converted_amount);
+        
+        -- Actualizar el balance de la subcategoría
+        SET @subcategory_balance = @subcategory_balance + @converted_amount;
+    END LOOP;
+    
+    -- Cerrar el cursor
+    CLOSE cur;
+    
+    -- Actualizar el balance de la subcategoría
+    UPDATE subcategories SET balance = @subcategory_balance WHERE id = subcategory_id;
+    
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterInsertTransaction
+AFTER INSERT ON transactions
+FOR EACH ROW
+BEGIN
+    -- Llamar al procedimiento para actualizar el balance de la subcategoría
+    CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterUpdateTransaction
+AFTER UPDATE ON transactions
+FOR EACH ROW
+BEGIN
+    -- Llamar al procedimiento para actualizar el balance de la subcategoría
+    CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
+END;
+
+$$
+
+DELIMITER ;
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterDeleteTransaction
+AFTER DELETE ON transactions
+FOR EACH ROW
+BEGIN
+    -- Llamar al procedimiento para actualizar el balance de la subcategoría
+    CALL UpdateSubcategoryBalances(OLD.subcategorie_id);
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+
+
+
+
+
+
 --
 -- Volcado de datos para la tabla `currency_conversion`
 --
