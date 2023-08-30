@@ -311,12 +311,34 @@ COMMIT;
 
 
 
+DELIMITER $$
 
+CREATE PROCEDURE ConvertCurrency(
+    IN amount_to_convert DOUBLE,
+    IN source_currency VARCHAR(4),
+    IN target_currency VARCHAR(4),
+    OUT converted_amount DOUBLE
+)
+BEGIN
+    DECLARE source_equivalence DOUBLE;
+    DECLARE target_equivalence DOUBLE;
 
+    -- Obtener las equivalencias de las divisas
+    SELECT equivalence1dolar INTO source_equivalence
+    FROM currency_conversion
+    WHERE currency = source_currency;
 
+    SELECT equivalence1dolar INTO target_equivalence
+    FROM currency_conversion
+    WHERE currency = target_currency;
 
+    -- Realizar la conversión
+    SET converted_amount = (amount_to_convert / source_equivalence) * target_equivalence;
+END;
 
+$$
 
+DELIMITER ;
 
 
 --
