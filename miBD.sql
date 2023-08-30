@@ -1,6 +1,8 @@
 -- Desactivar claves foráneas para permitir la eliminación de tablas
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP PROCEDURE IF EXISTS UpdateSubcategoryBalances;
+DROP PROCEDURE IF EXISTS ConvertCurrency;
 -- Eliminar todas las tablas
 DROP TABLE IF EXISTS `transactions`;
 DROP TABLE IF EXISTS `subcategories`;
@@ -354,45 +356,50 @@ BEGIN
     DECLARE trans_amount DOUBLE;
     DECLARE trans_currency VARCHAR(4);
     DECLARE subcat_currency VARCHAR(4);
+    DECLARE subcat_type INT;  -- To store the type of subcategory (1: Income, 2: Expenditure)
     
-    -- Cursor para obtener las transacciones de la subcategoría
+    -- Cursor to get transactions of the subcategory
     DECLARE cur CURSOR FOR
         SELECT id, amount, currency
         FROM transactions
         WHERE subcategorie_id = subcategory_id;
     
-    -- Declarar manejador para NOT FOUND
+    -- Declare handler for NOT FOUND
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
     
-    -- Obtener la divisa de la subcategoría
-    SELECT currency INTO subcat_currency
+    -- Get the currency and type of the subcategory
+    SELECT currency, type_id INTO subcat_currency, subcat_type
     FROM subcategories
     WHERE id = subcategory_id;
     
-    -- Inicializar balance de subcategoría en 0
+    -- Initialize subcategory balance to 0
     SET @subcategory_balance = 0;
     
-    -- Abrir el cursor
+    -- Open the cursor
     OPEN cur;
     
     read_loop: LOOP
-        -- Obtener valores de la transacción
+        -- Get values of the transaction
         FETCH cur INTO trans_id, trans_amount, trans_currency;
         IF done THEN
             LEAVE read_loop;
         END IF;
         
-        -- Convertir el monto de la transacción a la divisa de la subcategoría
+        -- Convert the transaction amount to the subcategory's currency
         CALL ConvertCurrency(trans_amount, trans_currency, subcat_currency, @converted_amount);
         
-        -- Actualizar el balance de la subcategoría
-        SET @subcategory_balance = @subcategory_balance + @converted_amount;
+        -- Adjust balance based on income or expenditure
+        IF subcat_type = 1 THEN  -- Income
+            SET @subcategory_balance = @subcategory_balance + @converted_amount;
+        ELSEIF subcat_type = 2 THEN  -- Expenditure
+            SET @subcategory_balance = @subcategory_balance - @converted_amount;
+        END IF;
     END LOOP;
     
-    -- Cerrar el cursor
+    -- Close the cursor
     CLOSE cur;
     
-    -- Actualizar el balance de la subcategoría
+    -- Update the subcategory balance
     UPDATE subcategories SET balance = @subcategory_balance WHERE id = subcategory_id;
     
 END;
@@ -401,6 +408,9 @@ $$
 
 DELIMITER ;
 
+
+-- Antes de actualiza el valor debemos tener en cuenta si la subcategorie es Income o Expenditure, si es un income se deja tal cual, 
+--pero si es Expenditure el balance de la subcategoria, el valor final se debe poner negativa
 
 
 DELIMITER $$
@@ -450,6 +460,41 @@ DELIMITER ;
 
 
 -- ------------------------------------------------------------------------------------------------------------------
+
+DELIMITER $$
+
+CREATE PROCEDURE UpdateSubcategoryBalanceOnCurrencyChange(
+    IN subcategory_id INT,
+    IN new_currency VARCHAR(4)
+)
+BEGIN
+    DECLARE old_currency VARCHAR(4);
+    DECLARE old_balance DOUBLE;
+    DECLARE new_balance DOUBLE;
+    
+    -- Get the old currency and balance of the subcategory
+    SELECT currency, balance INTO old_currency, old_balance
+    FROM subcategories
+    WHERE id = subcategory_id;
+    
+    -- If the currency is the same, no need to update
+    IF old_currency = new_currency THEN
+        RETURN; -- Exit the procedure
+    END IF;
+    
+    -- Convert the old balance to the new currency
+    CALL ConvertCurrency(old_balance, old_currency, new_currency, new_balance);
+    
+    -- Update the subcategory balance with the new converted balance
+    UPDATE subcategories
+    SET currency = new_currency, balance = new_balance
+    WHERE id = subcategory_id;
+    
+END;
+
+$$
+
+DELIMITER ;
 
 
 
