@@ -309,7 +309,7 @@ COMMIT;
 
 
 
-------------------------------------------------------------------------------------------------------------------
+-- ------------------------------------------------------------------------------------------------------------------
 
 DELIMITER $$
 
@@ -340,8 +340,10 @@ $$
 
 DELIMITER ;
 
-------------------------------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------------------------------
+-- ------------------------------------------------------------------------------------------------------------------
+
+
+-- ------------------------------------------------------------------------------------------------------------------
 
 DELIMITER $$
 
@@ -415,16 +417,16 @@ $$
 
 DELIMITER ;
 
-
-
 DELIMITER $$
 
 CREATE TRIGGER AfterUpdateTransaction
 AFTER UPDATE ON transactions
 FOR EACH ROW
 BEGIN
-    -- Llamar al procedimiento para actualizar el balance de la subcategoría
-    CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
+    IF NEW.currency != OLD.currency OR NEW.amount != OLD.amount THEN
+        -- Llamar al procedimiento para actualizar el balance de la subcategoría
+        CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
+    END IF;
 END;
 
 $$
@@ -447,8 +449,7 @@ $$
 DELIMITER ;
 
 
-------------------------------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------------------------------
+-- ------------------------------------------------------------------------------------------------------------------
 
 
 
@@ -487,10 +488,10 @@ INSERT INTO `users` (`id`, `username`, `email`, `country`, `phone`, `currency`, 
 --
 
 INSERT INTO `accounts` (`id`, `accountname`, `description`, `currency`, `balance`, `user_id`) VALUES
-(1, 'Cuenta Personal', 'Cuenta de ahorros personal', 'USD', 500, 10),
-(2, 'Cuenta de Gastos', 'Cuenta para gastos diarios', 'USD', 100, 11),
-(3, 'Cuenta de Viaje', 'Cuenta para gastos de viaje', 'GBP', 1000, 12),
-(4, 'Cuenta Empresarial', 'Cuenta para negocio', 'USD', 2000, 12);
+(1, 'Cuenta Personal', 'Cuenta de ahorros personal', 'USD', 0, 10),
+(2, 'Cuenta de Gastos', 'Cuenta para gastos diarios', 'USD', 0, 11),
+(3, 'Cuenta de Viaje', 'Cuenta para gastos de viaje', 'GBP', 0, 12),
+(4, 'Cuenta Empresarial', 'Cuenta para negocio', 'USD', 0, 12);
 
 --
 -- Volcado de datos para la tabla `categories`
