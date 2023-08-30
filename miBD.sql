@@ -463,40 +463,24 @@ DELIMITER ;
 
 DELIMITER $$
 
-CREATE PROCEDURE UpdateSubcategoryBalanceOnCurrencyChange(
-    IN subcategory_id INT,
-    IN new_currency VARCHAR(4)
-)
+CREATE TRIGGER BeforeUpdateSubcategoryCurrency
+BEFORE UPDATE ON subcategories
+FOR EACH ROW
 BEGIN
-    DECLARE old_currency VARCHAR(4);
-    DECLARE old_balance DOUBLE;
     DECLARE new_balance DOUBLE;
-    
-    -- Get the old currency and balance of the subcategory
-    SELECT currency, balance INTO old_currency, old_balance
-    FROM subcategories
-    WHERE id = subcategory_id;
-    
-    -- If the currency is the same, no need to update
-    IF old_currency = new_currency THEN
-        RETURN; -- Exit the procedure
-    END IF;
-    
-    -- Convert the old balance to the new currency
-    CALL ConvertCurrency(old_balance, old_currency, new_currency, new_balance);
-    
-    -- Update the subcategory balance with the new converted balance
-    UPDATE subcategories
-    SET currency = new_currency, balance = new_balance
-    WHERE id = subcategory_id;
-    
-END;
+    DECLARE converted_balance DOUBLE;
 
-$$
+    IF NEW.currency != OLD.currency THEN
+        SET new_balance = NEW.balance;
+
+        CALL ConvertCurrency(new_balance, OLD.currency, NEW.currency, converted_balance);
+
+        -- Actualizar el nuevo balance en la fila NEW antes de la actualización
+        SET NEW.balance = converted_balance;
+    END IF;
+END$$
 
 DELIMITER ;
-
-
 
 
 
