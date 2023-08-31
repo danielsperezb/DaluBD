@@ -5,8 +5,9 @@ DROP PROCEDURE IF EXISTS UpdateSubcategoryBalances;
 DROP PROCEDURE IF EXISTS ConvertCurrency;
 DROP PROCEDURE IF EXISTS UpdateCategoryBalances ;
 DROP PROCEDURE IF EXISTS UpdateAccountBalance ;
+DROP PROCEDURE IF EXISTS UpdateUserBalance ;
 
- 
+  
 -- Eliminar todas las tablas
 DROP TABLE IF EXISTS `transactions`;
 DROP TABLE IF EXISTS `subcategories`;
@@ -378,115 +379,6 @@ $$
 DELIMITER ;
 
 
--- Antes de actualiza el valor debemos tener en cuenta si la subcategorie es Income o Expenditure, si es un income se deja tal cual, 
---pero si es Expenditure el balance de la subcategoria, el valor final se debe poner negativa
-
-
-DELIMITER $$
-
-CREATE TRIGGER AfterInsertTransaction
-AFTER INSERT ON transactions
-FOR EACH ROW
-BEGIN
-    DECLARE cat_id INT;
-    DECLARE acc_id INT;
-    -- Llamar al procedimiento para actualizar el balance de la subcategoría
-    CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
-
-  -- Obtener el categorie_id correspondiente al subcategorie_id
-     SELECT categorie_id INTO cat_id
-     FROM subcategories
-     WHERE id = NEW.subcategorie_id;
-
-    -- Llamar al procedimiento para actualizar el balance de la categoría
-    CALL UpdateCategoryBalances(cat_id);
-
-    -- Obtener el account_id correspondiente al categorie_id
-    SELECT account_id INTO acc_id
-    FROM categories
-    WHERE id = cat_id;
-
-    -- Llamar al procedimiento para actualizar el balance de la cuenta
-    CALL UpdateAccountBalance(acc_id);
-    
-END;
-
-$$
-
-DELIMITER ;
-
-
-DELIMITER $$
-
-CREATE TRIGGER AfterUpdateTransaction
-AFTER UPDATE ON transactions
-FOR EACH ROW
-BEGIN
-    DECLARE cat_id INT;
-    DECLARE acc_id INT;
-
-    IF NEW.currency != OLD.currency OR NEW.amount != OLD.amount THEN
-        -- Llamar al procedimiento para actualizar el balance de la subcategoría
-        CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
-
-        -- Obtener el categorie_id correspondiente al subcategorie_id
-        SELECT categorie_id INTO cat_id
-        FROM subcategories
-        WHERE id = NEW.subcategorie_id;
-
-        -- Llamar al procedimiento para actualizar el balance de la categoría
-        CALL UpdateCategoryBalances(cat_id);
-
-        -- Obtener el account_id correspondiente al categorie_id
-        SELECT account_id INTO acc_id
-        FROM categories
-        WHERE id = cat_id;
-
-        -- Llamar al procedimiento para actualizar el balance de la cuenta
-        CALL UpdateAccountBalance(acc_id);
-    END IF;
-END;
-
-$$
-
-DELIMITER ;
-
-
-
-DELIMITER $$
-
-CREATE TRIGGER AfterDeleteTransaction
-AFTER DELETE ON transactions
-FOR EACH ROW
-BEGIN
-    DECLARE cat_id INT;
-    DECLARE acc_id INT;
-
-    -- Llamar al procedimiento para actualizar el balance de la subcategoría
-    CALL UpdateSubcategoryBalances(OLD.subcategorie_id);
-
-    -- Obtener el categorie_id correspondiente al subcategorie_id
-    SELECT categorie_id INTO cat_id
-    FROM subcategories
-    WHERE id = OLD.subcategorie_id;
-
-    -- Llamar al procedimiento para actualizar el balance de la categoría
-    CALL UpdateCategoryBalances(cat_id);
-
-    -- Obtener el account_id correspondiente al categorie_id
-    SELECT account_id INTO acc_id
-    FROM categories
-    WHERE id = cat_id;
-
-    -- Llamar al procedimiento para actualizar el balance de la cuenta
-    CALL UpdateAccountBalance(acc_id);
-END;
-
-$$
-
-DELIMITER ;
-
-
 
 -- ------------------------------------------------------------------------------------------------------------------
 
@@ -552,27 +444,6 @@ DELIMITER ;
 
 
 
--- DELIMITER $$
-
--- CREATE TRIGGER AfterUpdateSubcategory
--- AFTER UPDATE ON subcategories
--- FOR EACH ROW
--- BEGIN
---     IF NEW.balance != OLD.balance THEN
---         -- Llamar al procedimiento para actualizar el balance de la categoría
---         CALL UpdateCategoryBalances(NEW.categorie_id);
---     END IF;
--- END;
-
--- $$
-
--- DELIMITER ;
-
-
-
-
-
-
 
 DELIMITER $$
 
@@ -594,6 +465,175 @@ BEGIN
     -- Update the account balance
     UPDATE accounts SET balance = acc_balance WHERE id = account_id;
     
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+
+
+DELIMITER $$
+
+CREATE PROCEDURE UpdateUserBalance(IN user_id INT)
+BEGIN
+    DECLARE user_balance DOUBLE;
+    DECLARE user_currency VARCHAR(4);
+    
+    -- Get the currency of the user
+    SELECT currency INTO user_currency
+    FROM users
+    WHERE id = user_id;
+
+    -- Calculate user balance
+    SELECT SUM((a.balance / (SELECT equivalence1dolar FROM currency_conversion WHERE currency = a.currency)) * (SELECT equivalence1dolar FROM currency_conversion WHERE currency = user_currency)) INTO user_balance
+    FROM accounts a
+    WHERE a.user_id = user_id;
+    
+    -- Update the user's balance
+    UPDATE users
+    SET balance = user_balance
+    WHERE id = user_id;
+    
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterInsertTransaction
+AFTER INSERT ON transactions
+FOR EACH ROW
+BEGIN
+    DECLARE cat_id INT;
+    DECLARE acc_id INT;
+    DECLARE users_id INT; -- Agregar esta variable para almacenar el user_id
+    
+    -- Llamar al procedimiento para actualizar el balance de la subcategoría
+    CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
+
+    -- Obtener el categorie_id correspondiente al subcategorie_id
+    SELECT categorie_id INTO cat_id
+    FROM subcategories
+    WHERE id = NEW.subcategorie_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la categoría
+    CALL UpdateCategoryBalances(cat_id);
+
+    -- Obtener el account_id correspondiente al categorie_id
+    SELECT account_id INTO acc_id
+    FROM categories
+    WHERE id = cat_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la cuenta
+    CALL UpdateAccountBalance(acc_id);
+
+    -- Obtener el user_id correspondiente al account_id
+    SELECT user_id INTO users_id
+    FROM accounts
+    WHERE id = acc_id;
+
+    -- Llamar al procedimiento para actualizar el balance del usuario
+    CALL UpdateUserBalance(users_id);
+    
+END;
+
+$$
+
+DELIMITER ;
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterUpdateTransaction
+AFTER UPDATE ON transactions
+FOR EACH ROW
+BEGIN
+    DECLARE cat_id INT;
+    DECLARE acc_id INT;
+    DECLARE user_id INT; -- Agregar esta variable para almacenar el user_id
+
+    IF NEW.currency != OLD.currency OR NEW.amount != OLD.amount THEN
+        -- Llamar al procedimiento para actualizar el balance de la subcategoría
+        CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
+
+        -- Obtener el categorie_id correspondiente al subcategorie_id
+        SELECT categorie_id INTO cat_id
+        FROM subcategories
+        WHERE id = NEW.subcategorie_id;
+
+        -- Llamar al procedimiento para actualizar el balance de la categoría
+        CALL UpdateCategoryBalances(cat_id);
+
+        -- Obtener el account_id correspondiente al categorie_id
+        SELECT account_id INTO acc_id
+        FROM categories
+        WHERE id = cat_id;
+
+        -- Llamar al procedimiento para actualizar el balance de la cuenta
+        CALL UpdateAccountBalance(acc_id);
+
+        -- Obtener el user_id correspondiente al account_id
+        SELECT user_id INTO user_id
+        FROM accounts
+        WHERE id = acc_id;
+
+        -- Llamar al procedimiento para actualizar el balance del usuario
+        CALL UpdateUserBalance(user_id);
+        
+    END IF;
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterDeleteTransaction
+AFTER DELETE ON transactions
+FOR EACH ROW
+BEGIN
+    DECLARE cat_id INT;
+    DECLARE acc_id INT;
+    DECLARE user_id INT; -- Agregar esta variable para almacenar el user_id
+
+    -- Llamar al procedimiento para actualizar el balance de la subcategoría
+    CALL UpdateSubcategoryBalances(OLD.subcategorie_id);
+
+    -- Obtener el categorie_id correspondiente al subcategorie_id
+    SELECT categorie_id INTO cat_id
+    FROM subcategories
+    WHERE id = OLD.subcategorie_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la categoría
+    CALL UpdateCategoryBalances(cat_id);
+
+    -- Obtener el account_id correspondiente al categorie_id
+    SELECT account_id INTO acc_id
+    FROM categories
+    WHERE id = cat_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la cuenta
+    CALL UpdateAccountBalance(acc_id);
+
+    -- Obtener el user_id correspondiente al account_id
+    SELECT user_id INTO user_id
+    FROM accounts
+    WHERE id = acc_id;
+
+    -- Llamar al procedimiento para actualizar el balance del usuario
+    CALL UpdateUserBalance(user_id);
 END;
 
 $$
@@ -628,7 +668,18 @@ CREATE TRIGGER AfterDeleteSubcategory
 AFTER DELETE ON subcategories
 FOR EACH ROW
 BEGIN
+    DECLARE acc_id INT;
+    
+    -- Llamar al procedimiento para actualizar los saldos de las categorías
     CALL UpdateCategoryBalances(OLD.categorie_id);
+
+    -- Obtener el account_id correspondiente al categorie_id
+    SELECT account_id INTO acc_id
+    FROM categories
+    WHERE id = OLD.categorie_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la cuenta
+    CALL UpdateAccountBalance(acc_id);
 END;
 
 $$
