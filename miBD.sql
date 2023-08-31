@@ -3,6 +3,10 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 DROP PROCEDURE IF EXISTS UpdateSubcategoryBalances;
 DROP PROCEDURE IF EXISTS ConvertCurrency;
+DROP PROCEDURE IF EXISTS UpdateCategoryBalances ;
+DROP PROCEDURE IF EXISTS UpdateAccountBalance ;
+
+ 
 -- Eliminar todas las tablas
 DROP TABLE IF EXISTS `transactions`;
 DROP TABLE IF EXISTS `subcategories`;
@@ -419,13 +423,33 @@ CREATE TRIGGER AfterInsertTransaction
 AFTER INSERT ON transactions
 FOR EACH ROW
 BEGIN
+    DECLARE cat_id INT;
+    DECLARE acc_id INT;
     -- Llamar al procedimiento para actualizar el balance de la subcategoría
     CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
+
+  -- Obtener el categorie_id correspondiente al subcategorie_id
+     SELECT categorie_id INTO cat_id
+     FROM subcategories
+     WHERE id = NEW.subcategorie_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la categoría
+    CALL UpdateCategoryBalances(cat_id);
+
+    -- Obtener el account_id correspondiente al categorie_id
+    SELECT account_id INTO acc_id
+    FROM categories
+    WHERE id = cat_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la cuenta
+    CALL UpdateAccountBalance(acc_id);
+    
 END;
 
 $$
 
 DELIMITER ;
+
 
 DELIMITER $$
 
@@ -433,9 +457,28 @@ CREATE TRIGGER AfterUpdateTransaction
 AFTER UPDATE ON transactions
 FOR EACH ROW
 BEGIN
+    DECLARE cat_id INT;
+    DECLARE acc_id INT;
+
     IF NEW.currency != OLD.currency OR NEW.amount != OLD.amount THEN
         -- Llamar al procedimiento para actualizar el balance de la subcategoría
         CALL UpdateSubcategoryBalances(NEW.subcategorie_id);
+
+        -- Obtener el categorie_id correspondiente al subcategorie_id
+        SELECT categorie_id INTO cat_id
+        FROM subcategories
+        WHERE id = NEW.subcategorie_id;
+
+        -- Llamar al procedimiento para actualizar el balance de la categoría
+        CALL UpdateCategoryBalances(cat_id);
+
+        -- Obtener el account_id correspondiente al categorie_id
+        SELECT account_id INTO acc_id
+        FROM categories
+        WHERE id = cat_id;
+
+        -- Llamar al procedimiento para actualizar el balance de la cuenta
+        CALL UpdateAccountBalance(acc_id);
     END IF;
 END;
 
@@ -444,19 +487,40 @@ $$
 DELIMITER ;
 
 
+
 DELIMITER $$
 
 CREATE TRIGGER AfterDeleteTransaction
 AFTER DELETE ON transactions
 FOR EACH ROW
 BEGIN
+    DECLARE cat_id INT;
+    DECLARE acc_id INT;
+
     -- Llamar al procedimiento para actualizar el balance de la subcategoría
     CALL UpdateSubcategoryBalances(OLD.subcategorie_id);
+
+    -- Obtener el categorie_id correspondiente al subcategorie_id
+    SELECT categorie_id INTO cat_id
+    FROM subcategories
+    WHERE id = OLD.subcategorie_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la categoría
+    CALL UpdateCategoryBalances(cat_id);
+
+    -- Obtener el account_id correspondiente al categorie_id
+    SELECT account_id INTO acc_id
+    FROM categories
+    WHERE id = cat_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la cuenta
+    CALL UpdateAccountBalance(acc_id);
 END;
 
 $$
 
 DELIMITER ;
+
 
 
 -- ------------------------------------------------------------------------------------------------------------------
@@ -485,9 +549,174 @@ DELIMITER ;
 
 
 
---
--- Volcado de datos para la tabla `currency_conversion`
---
+
+
+
+
+
+
+
+
+DELIMITER $$
+
+CREATE PROCEDURE UpdateCategoryBalances(IN category_id INT)
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE subcat_id INT;
+    DECLARE subcat_balance DOUBLE;
+    DECLARE cat_currency VARCHAR(4);
+    DECLARE subcat_currency VARCHAR(4);
+    
+    -- Cursor to get subcategories of the category
+    DECLARE cur CURSOR FOR
+        SELECT id, balance, currency
+        FROM subcategories
+        WHERE categorie_id = category_id;
+    
+    -- Declare handler for NOT FOUND
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    -- Get the currency of the category
+    SELECT currency INTO cat_currency
+    FROM categories
+    WHERE id = category_id;
+    
+    -- Initialize category balance to 0
+    SET @category_balance = 0;
+    
+    -- Open the cursor
+    OPEN cur;
+    
+    read_loop: LOOP
+        -- Get values of the subcategory
+        FETCH cur INTO subcat_id, subcat_balance, subcat_currency;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        -- Convert the subcategory balance to the category's currency
+        CALL ConvertCurrency(subcat_balance, subcat_currency, cat_currency, @converted_balance);
+        
+        -- Update category balance
+        SET @category_balance = @category_balance + @converted_balance;
+    END LOOP;
+    
+    -- Close the cursor
+    CLOSE cur;
+    
+    -- Update the category balance
+    UPDATE categories SET balance = @category_balance WHERE id = category_id;
+    
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+-- DELIMITER $$
+
+-- CREATE TRIGGER AfterUpdateSubcategory
+-- AFTER UPDATE ON subcategories
+-- FOR EACH ROW
+-- BEGIN
+--     IF NEW.balance != OLD.balance THEN
+--         -- Llamar al procedimiento para actualizar el balance de la categoría
+--         CALL UpdateCategoryBalances(NEW.categorie_id);
+--     END IF;
+-- END;
+
+-- $$
+
+-- DELIMITER ;
+
+
+
+
+
+
+
+-- mdklfmfdsffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+
+DELIMITER $$
+
+CREATE PROCEDURE UpdateAccountBalance(IN account_id INT)
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE cat_id INT;
+    DECLARE cat_balance DOUBLE;
+    DECLARE cat_currency VARCHAR(4);
+    DECLARE acc_currency VARCHAR(4);
+    
+    -- Cursor to get categories of the account
+    DECLARE cur CURSOR FOR
+        SELECT id, balance, currency
+        FROM categories
+        WHERE account_id = account_id;
+    
+    -- Declare handler for NOT FOUND
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    -- Get the currency of the account
+    SELECT currency INTO acc_currency
+    FROM accounts
+    WHERE id = account_id;
+    
+    -- Initialize account balance to 0
+    SET @account_balance = 0;
+    
+    -- Open the cursor
+    OPEN cur;
+    
+    read_loop: LOOP
+        -- Get values of the category
+        FETCH cur INTO cat_id, cat_balance, cat_currency;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        -- Convert the category balance to the account's currency
+        CALL ConvertCurrency(cat_balance, cat_currency, acc_currency, @converted_balance);
+        
+        -- Update account balance
+        SET @account_balance = @account_balance + @converted_balance;
+    END LOOP;
+    
+    -- Close the cursor
+    CLOSE cur;
+    
+    -- Update the account balance
+    UPDATE accounts SET balance = @account_balance WHERE id = account_id;
+    
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+-- DELIMITER $$
+
+-- CREATE TRIGGER AfterUpdateCategoryBalance
+-- AFTER UPDATE ON categories
+-- FOR EACH ROW
+-- BEGIN
+--     IF NEW.balance != OLD.balance THEN
+--         -- Llamar al procedimiento para actualizar el balance de la cuenta
+--         CALL UpdateAccountBalance(NEW.account_id);
+--     END IF;
+-- END;
+
+-- $$
+
+-- DELIMITER ;
+
+
+
+
+
 
 INSERT INTO `currency_conversion` (`id`, `currency`, `equivalence1dolar`) VALUES
 (1, 'USD', 1),
@@ -553,16 +782,45 @@ INSERT INTO `subcategories` (`id`, `subcategoryname`, `balance`, `currency`, `ca
 -- Volcado de datos para la tabla `transactions`
 --
 
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`) VALUES
-(1, '2023-08-29', 'USD', 50.25, 'Compras en el supermercado', 1),
-(2, '2023-08-28', 'USD', 20.5, 'Cena con amigos', 2),
-(3, '2023-08-27', 'GBP', 25, 'Boletos de cine', 3),
-(4, '2023-08-26', 'GBP', 40, 'Boletos de teatro', 4),
-(5, '2023-08-25', 'USD', 15.75, 'Frutas frescas', 5),
-(6, '2023-08-24', 'USD', 30, 'Viaje en taxi', 6),
-(7, '2023-08-23', 'GBP', 12.5, 'Comida rápida', 7),
-(8, '2023-08-22', 'USD', 10, 'Compra de útiles', 8);
 
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+VALUES (1, '2023-08-29', 'USD', 50.25, 'Compras en el supermercado', 1);
+
+SELECT SLEEP(5); -- Pausa de 5 segundos
+
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+VALUES (2, '2023-08-28', 'USD', 20.5, 'Cena con amigos', 2);
+
+SELECT SLEEP(5); -- Pausa de 5 segundos
+
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+VALUES (3, '2023-08-27', 'GBP', 25, 'Boletos de cine', 3);
+
+SELECT SLEEP(5); -- Pausa de 5 segundos
+
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+VALUES (4, '2023-08-26', 'GBP', 40, 'Boletos de teatro', 4);
+
+SELECT SLEEP(5); -- Pausa de 5 segundos
+
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+VALUES (5, '2023-08-25', 'USD', 15.75, 'Frutas frescas', 5);
+
+SELECT SLEEP(5); -- Pausa de 5 segundos
+
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+VALUES (6, '2023-08-24', 'USD', 30, 'Viaje en taxi', 6);
+
+SELECT SLEEP(5); -- Pausa de 5 segundos
+
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+VALUES (7, '2023-08-23', 'GBP', 12.5, 'Comida rápida', 7);
+
+SELECT SLEEP(5); -- Pausa de 5 segundos
+
+
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+VALUES (8, '2023-08-22', 'USD', 10, 'Compra de útiles', 8);
 
 
 
