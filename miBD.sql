@@ -654,13 +654,23 @@ CREATE TRIGGER AfterDeleteCategory
 AFTER DELETE ON categories
 FOR EACH ROW
 BEGIN
+    DECLARE users_id INT;
+
+    -- Obtener el user_id correspondiente al account_id que está siendo eliminado
+    SELECT user_id INTO users_id
+    FROM accounts
+    WHERE id = OLD.account_id;
+
+    -- Llamar al procedimiento para actualizar el balance de la cuenta
     CALL UpdateAccountBalance(OLD.account_id);
+
+    -- Llamar al procedimiento para actualizar el balance del usuario
+    CALL UpdateUserBalance(users_id);
 END;
 
 $$
 
 DELIMITER ;
-
 
 DELIMITER $$
 
@@ -669,7 +679,8 @@ AFTER DELETE ON subcategories
 FOR EACH ROW
 BEGIN
     DECLARE acc_id INT;
-    
+    DECLARE users_id INT;
+
     -- Llamar al procedimiento para actualizar los saldos de las categorías
     CALL UpdateCategoryBalances(OLD.categorie_id);
 
@@ -680,6 +691,14 @@ BEGIN
 
     -- Llamar al procedimiento para actualizar el balance de la cuenta
     CALL UpdateAccountBalance(acc_id);
+
+    -- Obtener el user_id correspondiente al account_id
+    SELECT user_id INTO users_id
+    FROM accounts
+    WHERE id = acc_id;
+
+    -- Llamar al procedimiento para actualizar el balance del usuario
+    CALL UpdateUserBalance(users_id);
 END;
 
 $$
@@ -687,6 +706,22 @@ $$
 DELIMITER ;
 
 
+
+DELIMITER $$
+
+CREATE TRIGGER AfterDeleteAccount
+AFTER DELETE ON accounts
+FOR EACH ROW
+BEGIN
+    
+    CALL UpdateUserBalance(OLD.user_id);
+
+
+END;
+
+$$
+
+DELIMITER ;
 
 
 
