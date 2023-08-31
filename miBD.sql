@@ -558,7 +558,7 @@ FOR EACH ROW
 BEGIN
     DECLARE cat_id INT;
     DECLARE acc_id INT;
-    DECLARE user_id INT; -- Agregar esta variable para almacenar el user_id
+    DECLARE users_id INT; -- Agregar esta variable para almacenar el user_id
 
     IF NEW.currency != OLD.currency OR NEW.amount != OLD.amount THEN
         -- Llamar al procedimiento para actualizar el balance de la subcategoría
@@ -581,12 +581,12 @@ BEGIN
         CALL UpdateAccountBalance(acc_id);
 
         -- Obtener el user_id correspondiente al account_id
-        SELECT user_id INTO user_id
+        SELECT user_id INTO users_id
         FROM accounts
         WHERE id = acc_id;
 
         -- Llamar al procedimiento para actualizar el balance del usuario
-        CALL UpdateUserBalance(user_id);
+        CALL UpdateUserBalance(users_id);
         
     END IF;
 END;
