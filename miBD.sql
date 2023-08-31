@@ -349,56 +349,27 @@ DELIMITER $$
 
 CREATE PROCEDURE UpdateSubcategoryBalances(IN subcategory_id INT)
 BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE trans_id INT;
-    DECLARE trans_amount DOUBLE;
-    DECLARE trans_currency VARCHAR(4);
-    DECLARE subcat_currency VARCHAR(4);
-    DECLARE subcat_type INT;  -- To store the type of subcategory (1: Income, 2: Expenditure)
-    
-    -- Cursor to get transactions of the subcategory
-    DECLARE cur CURSOR FOR
-        SELECT id, amount, currency
-        FROM transactions
-        WHERE subcategorie_id = subcategory_id;
-    
-    -- Declare handler for NOT FOUND
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-    
-    -- Get the currency and type of the subcategory
-    SELECT currency, type_id INTO subcat_currency, subcat_type
-    FROM subcategories
-    WHERE id = subcategory_id;
-    
-    -- Initialize subcategory balance to 0
-    SET @subcategory_balance = 0;
-    
-    -- Open the cursor
-    OPEN cur;
-    
-    read_loop: LOOP
-        -- Get values of the transaction
-        FETCH cur INTO trans_id, trans_amount, trans_currency;
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        -- Convert the transaction amount to the subcategory's currency
-        CALL ConvertCurrency(trans_amount, trans_currency, subcat_currency, @converted_amount);
-        
-        -- Adjust balance based on income or expenditure
-        IF subcat_type = 1 THEN  -- Income
-            SET @subcategory_balance = @subcategory_balance + @converted_amount;
-        ELSEIF subcat_type = 2 THEN  -- Expenditure
-            SET @subcategory_balance = @subcategory_balance - @converted_amount;
-        END IF;
-    END LOOP;
-    
-    -- Close the cursor
-    CLOSE cur;
-    
-    -- Update the subcategory balance
-    UPDATE subcategories SET balance = @subcategory_balance WHERE id = subcategory_id;
+    -- Update subcategory balance for income transactions
+    UPDATE subcategories s
+    SET s.balance = (
+        SELECT SUM(
+            t.amount / (SELECT equivalence1dolar FROM currency_conversion WHERE currency = t.currency) 
+        )
+        FROM transactions t
+        WHERE t.subcategorie_id = s.id AND s.type_id = 1
+    )
+    WHERE s.id = subcategory_id AND s.type_id = 1;
+
+    -- Update subcategory balance for expenditure transactions
+    UPDATE subcategories s
+    SET s.balance = (
+        SELECT -SUM(
+            t.amount / (SELECT equivalence1dolar FROM currency_conversion WHERE currency = t.currency) 
+        )
+        FROM transactions t
+        WHERE t.subcategorie_id = s.id AND s.type_id = 2
+    )
+    WHERE s.id = subcategory_id AND s.type_id = 2;
     
 END;
 
@@ -550,62 +521,34 @@ DELIMITER ;
 
 
 
-
 DELIMITER $$
 
 CREATE PROCEDURE UpdateCategoryBalances(IN category_id INT)
 BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE subcat_id INT;
-    DECLARE subcat_balance DOUBLE;
     DECLARE cat_currency VARCHAR(4);
-    DECLARE subcat_currency VARCHAR(4);
-    
-    -- Cursor to get subcategories of the category
-    DECLARE cur CURSOR FOR
-        SELECT id, balance, currency
-        FROM subcategories
-        WHERE categorie_id = category_id;
-    
-    -- Declare handler for NOT FOUND
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
     
     -- Get the currency of the category
     SELECT currency INTO cat_currency
     FROM categories
     WHERE id = category_id;
     
-    -- Initialize category balance to 0
-    SET @category_balance = 0;
-    
-    -- Open the cursor
-    OPEN cur;
-    
-    read_loop: LOOP
-        -- Get values of the subcategory
-        FETCH cur INTO subcat_id, subcat_balance, subcat_currency;
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        -- Convert the subcategory balance to the category's currency
-        CALL ConvertCurrency(subcat_balance, subcat_currency, cat_currency, @converted_balance);
-        
-        -- Update category balance
-        SET @category_balance = @category_balance + @converted_balance;
-    END LOOP;
-    
-    -- Close the cursor
-    CLOSE cur;
-    
-    -- Update the category balance
-    UPDATE categories SET balance = @category_balance WHERE id = category_id;
+    -- Update category balance
+    UPDATE categories c
+    SET c.balance = (
+        SELECT SUM(
+            (s.balance / (SELECT equivalence1dolar FROM currency_conversion WHERE currency = s.currency)) * (SELECT equivalence1dolar FROM currency_conversion WHERE currency = cat_currency)
+        )
+        FROM subcategories s
+        WHERE s.categorie_id = c.id
+    )
+    WHERE c.id = category_id;
     
 END;
 
 $$
 
 DELIMITER ;
+
 
 
 
@@ -659,21 +602,42 @@ DELIMITER ;
 
 
 
--- DELIMITER $$
 
--- CREATE TRIGGER AfterUpdateCategoryBalance
--- AFTER UPDATE ON categories
--- FOR EACH ROW
--- BEGIN
---     IF NEW.balance != OLD.balance THEN
---         -- Llamar al procedimiento para actualizar el balance de la cuenta
---         CALL UpdateAccountBalance(NEW.account_id);
---     END IF;
--- END;
 
--- $$
 
--- DELIMITER ;
+
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterDeleteCategory
+AFTER DELETE ON categories
+FOR EACH ROW
+BEGIN
+    CALL UpdateAccountBalance(OLD.account_id);
+END;
+
+$$
+
+DELIMITER ;
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterDeleteSubcategory
+AFTER DELETE ON subcategories
+FOR EACH ROW
+BEGIN
+    CALL UpdateCategoryBalances(OLD.categorie_id);
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+
 
 
 
