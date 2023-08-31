@@ -24,12 +24,6 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 
 
-
-
-
-
-
-
 --
 -- Base de datos: `u314379653_dalugestorfin`
 --
@@ -637,57 +631,25 @@ DELIMITER ;
 
 
 
--- mdklfmfdsffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-
 DELIMITER $$
 
 CREATE PROCEDURE UpdateAccountBalance(IN account_id INT)
 BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE cat_id INT;
-    DECLARE cat_balance DOUBLE;
-    DECLARE cat_currency VARCHAR(4);
+    DECLARE acc_balance DOUBLE;
     DECLARE acc_currency VARCHAR(4);
-    
-    -- Cursor to get categories of the account
-    DECLARE cur CURSOR FOR
-        SELECT id, balance, currency
-        FROM categories
-        WHERE account_id = account_id;
-    
-    -- Declare handler for NOT FOUND
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
     
     -- Get the currency of the account
     SELECT currency INTO acc_currency
     FROM accounts
     WHERE id = account_id;
-    
-    -- Initialize account balance to 0
-    SET @account_balance = 0;
-    
-    -- Open the cursor
-    OPEN cur;
-    
-    read_loop: LOOP
-        -- Get values of the category
-        FETCH cur INTO cat_id, cat_balance, cat_currency;
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        -- Convert the category balance to the account's currency
-        CALL ConvertCurrency(cat_balance, cat_currency, acc_currency, @converted_balance);
-        
-        -- Update account balance
-        SET @account_balance = @account_balance + @converted_balance;
-    END LOOP;
-    
-    -- Close the cursor
-    CLOSE cur;
+
+    -- Calculate account balance
+    SELECT SUM((c.balance / (SELECT equivalence1dolar FROM currency_conversion WHERE currency = c.currency)) * (SELECT equivalence1dolar FROM currency_conversion WHERE currency = acc_currency)) INTO acc_balance
+    FROM categories c
+    WHERE c.account_id = account_id;
     
     -- Update the account balance
-    UPDATE accounts SET balance = @account_balance WHERE id = account_id;
+    UPDATE accounts SET balance = acc_balance WHERE id = account_id;
     
 END;
 
@@ -783,48 +745,57 @@ INSERT INTO `subcategories` (`id`, `subcategoryname`, `balance`, `currency`, `ca
 --
 
 
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
-VALUES (1, '2023-08-29', 'USD', 50.25, 'Compras en el supermercado', 1);
+-- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+-- VALUES (1, '2023-08-29', 'USD', 1, 'Compras en el supermercado', 1);
 
-SELECT SLEEP(5); -- Pausa de 5 segundos
+-- SELECT SLEEP(5); -- Pausa de 5 segundos
 
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
-VALUES (2, '2023-08-28', 'USD', 20.5, 'Cena con amigos', 2);
+-- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+-- VALUES (2, '2023-08-28', 'USD', 1, 'Cena con amigos', 2);
 
-SELECT SLEEP(5); -- Pausa de 5 segundos
+-- SELECT SLEEP(5); -- Pausa de 5 segundos
 
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
-VALUES (3, '2023-08-27', 'GBP', 25, 'Boletos de cine', 3);
+-- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+-- VALUES (3, '2023-08-27', 'GBP', 1, 'Boletos de cine', 3);
 
-SELECT SLEEP(5); -- Pausa de 5 segundos
+-- SELECT SLEEP(5); -- Pausa de 5 segundos
 
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
-VALUES (4, '2023-08-26', 'GBP', 40, 'Boletos de teatro', 4);
+-- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+-- VALUES (4, '2023-08-26', 'GBP', 1, 'Boletos de teatro', 4);
 
-SELECT SLEEP(5); -- Pausa de 5 segundos
+-- SELECT SLEEP(5); -- Pausa de 5 segundos
 
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
-VALUES (5, '2023-08-25', 'USD', 15.75, 'Frutas frescas', 5);
+-- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+-- VALUES (5, '2023-08-25', 'USD', 1, 'Frutas frescas', 5);
 
-SELECT SLEEP(5); -- Pausa de 5 segundos
+-- SELECT SLEEP(5); -- Pausa de 5 segundos
 
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
-VALUES (6, '2023-08-24', 'USD', 30, 'Viaje en taxi', 6);
+-- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+-- VALUES (6, '2023-08-24', 'USD', 1, 'Viaje en taxi', 6);
 
-SELECT SLEEP(5); -- Pausa de 5 segundos
+-- SELECT SLEEP(5); -- Pausa de 5 segundos
 
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
-VALUES (7, '2023-08-23', 'GBP', 12.5, 'Comida rápida', 7);
+-- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+-- VALUES (7, '2023-08-23', 'GBP', 1, 'Comida rápida', 7);
 
-SELECT SLEEP(5); -- Pausa de 5 segundos
-
-
-INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
-VALUES (8, '2023-08-22', 'USD', 10, 'Compra de útiles', 8);
+-- SELECT SLEEP(5); -- Pausa de 5 segundos
 
 
+-- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
+-- VALUES (8, '2023-08-22', 'USD', 1, 'Compra de útiles', 8);
 
 
+
+
+INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`) VALUES
+(1, '2023-08-29', 'USD', 50.25, 'Compras en el supermercado', 1),
+(2, '2023-08-28', 'USD', 20.5, 'Cena con amigos', 2),
+(3, '2023-08-27', 'GBP', 25, 'Boletos de cine', 3),
+(4, '2023-08-26', 'GBP', 40, 'Boletos de teatro', 4),
+(5, '2023-08-25', 'USD', 15.75, 'Frutas frescas', 5),
+(6, '2023-08-24', 'USD', 30, 'Viaje en taxi', 6),
+(7, '2023-08-23', 'GBP', 12.5, 'Comida rápida', 7),
+(8, '2023-08-22', 'USD', 10, 'Compra de útiles', 8);
 
 
 
