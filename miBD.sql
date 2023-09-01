@@ -403,6 +403,33 @@ END$$
 
 DELIMITER ;
 
+
+
+
+DELIMITER $$
+
+CREATE TRIGGER BeforeUpdateTransactionCurrency
+BEFORE UPDATE ON transactions
+FOR EACH ROW
+BEGIN
+    DECLARE new_amount DOUBLE;
+    DECLARE converted_amount DOUBLE;
+
+    IF NEW.currency != OLD.currency THEN
+        SET new_amount = NEW.amount;
+
+        CALL ConvertCurrency(new_amount, OLD.currency, NEW.currency, converted_amount);
+
+        -- Actualizar el nuevo monto en la fila NEW antes de la actualización
+        SET NEW.amount = converted_amount;
+    END IF;
+END$$
+
+DELIMITER ;
+
+
+
+
 DELIMITER $$
 
 CREATE TRIGGER BeforeUpdateCategoryCurrency
@@ -445,6 +472,10 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+
+
+
 
 DELIMITER $$
 
