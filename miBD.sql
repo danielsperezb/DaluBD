@@ -1,24 +1,24 @@
--- -- Desactivar claves foráneas para permitir la eliminación de tablas
--- SET FOREIGN_KEY_CHECKS = 0;
+-- Desactivar claves foráneas para permitir la eliminación de tablas
+SET FOREIGN_KEY_CHECKS = 0;
 
--- DROP PROCEDURE IF EXISTS UpdateSubcategoryBalances;
--- DROP PROCEDURE IF EXISTS ConvertCurrency;
--- DROP PROCEDURE IF EXISTS UpdateCategoryBalances ;
--- DROP PROCEDURE IF EXISTS UpdateAccountBalance ;
--- DROP PROCEDURE IF EXISTS UpdateUserBalance ;
+DROP PROCEDURE IF EXISTS UpdateSubcategoryBalances;
+DROP PROCEDURE IF EXISTS ConvertCurrency;
+DROP PROCEDURE IF EXISTS UpdateCategoryBalances ;
+DROP PROCEDURE IF EXISTS UpdateAccountBalance ;
+DROP PROCEDURE IF EXISTS UpdateUserBalance ;
 
   
--- -- Eliminar todas las tablas
--- DROP TABLE IF EXISTS `transactions`;
--- DROP TABLE IF EXISTS `subcategories`;
--- DROP TABLE IF EXISTS `categories`;
--- DROP TABLE IF EXISTS `accounts`;
--- DROP TABLE IF EXISTS `users`;
--- DROP TABLE IF EXISTS `types`;
--- DROP TABLE IF EXISTS `currency_conversion`;
+-- Eliminar todas las tablas
+DROP TABLE IF EXISTS `transactions`;
+DROP TABLE IF EXISTS `subcategories`;
+DROP TABLE IF EXISTS `categories`;
+DROP TABLE IF EXISTS `accounts`;
+DROP TABLE IF EXISTS `users`;
+DROP TABLE IF EXISTS `types`;
+DROP TABLE IF EXISTS `currency_conversion`;
 
--- -- Reactivar claves foráneas después de eliminar tablas
--- SET FOREIGN_KEY_CHECKS = 1;
+-- Reactivar claves foráneas después de eliminar tablas
+SET FOREIGN_KEY_CHECKS = 1;
 
 
 
@@ -402,6 +402,146 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER BeforeUpdateCategoryCurrency
+BEFORE UPDATE ON categories
+FOR EACH ROW
+BEGIN
+    DECLARE new_balance DOUBLE;
+    DECLARE converted_balance DOUBLE;
+
+    IF NEW.currency != OLD.currency THEN
+        SET new_balance = NEW.balance;
+
+        CALL ConvertCurrency(new_balance, OLD.currency, NEW.currency, converted_balance);
+
+        -- Actualizar el nuevo balance en la fila NEW antes de la actualización
+        SET NEW.balance = converted_balance;
+    END IF;
+END$$
+
+DELIMITER ;
+
+
+DELIMITER $$
+
+CREATE TRIGGER BeforeUpdateAccountCurrency
+BEFORE UPDATE ON accounts
+FOR EACH ROW
+BEGIN
+    DECLARE new_balance DOUBLE;
+    DECLARE converted_balance DOUBLE;
+
+    IF NEW.currency != OLD.currency THEN
+        SET new_balance = NEW.balance;
+
+        CALL ConvertCurrency(new_balance, OLD.currency, NEW.currency, converted_balance);
+
+        -- Actualizar el nuevo balance en la fila NEW antes de la actualización
+        SET NEW.balance = converted_balance;
+    END IF;
+END$$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER BeforeUpdateSubcategoryType
+BEFORE UPDATE ON subcategories
+FOR EACH ROW
+BEGIN
+    DECLARE cat_id INT;
+    DECLARE acc_id INT;
+    DECLARE users_id INT;
+
+    IF NEW.type_id != OLD.type_id THEN
+        SET NEW.balance = OLD.balance * -1;
+
+        
+    END IF;
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+DELIMITER $$
+
+CREATE TRIGGER AfterUpdateSubcategoryType
+AFTER UPDATE ON subcategories
+FOR EACH ROW
+BEGIN
+    DECLARE cat_id INT;
+    DECLARE acc_id INT;
+    DECLARE users_id INT;
+
+    IF NEW.type_id != OLD.type_id THEN
+
+        SELECT categorie_id INTO cat_id
+        FROM subcategories
+        WHERE id = NEW.id;
+
+        -- Call the procedure to update the balance of the category
+        CALL UpdateCategoryBalances(cat_id);
+
+        -- Get the account_id corresponding to the categorie_id
+        SELECT account_id INTO acc_id
+        FROM categories
+        WHERE id = cat_id;
+
+        -- Call the procedure to update the balance of the account
+        CALL UpdateAccountBalance(acc_id);
+
+        -- Get the user_id corresponding to the account_id
+        SELECT user_id INTO users_id
+        FROM accounts
+        WHERE id = acc_id;
+
+        -- Call the procedure to update the balance of the user
+        CALL UpdateUserBalance(users_id);
+    END IF;
+END;
+
+$$
+
+DELIMITER ;
+
+
+
+
+
+
+
+
+
+
+
+
+DELIMITER $$
+
+CREATE TRIGGER BeforeUpdateUserCurrency
+BEFORE UPDATE ON users
+FOR EACH ROW
+BEGIN
+    DECLARE new_balance DOUBLE;
+    DECLARE converted_balance DOUBLE;
+
+    IF NEW.currency != OLD.currency THEN
+        SET new_balance = NEW.balance;
+
+        CALL ConvertCurrency(new_balance, OLD.currency, NEW.currency, converted_balance);
+
+        -- Actualizar el nuevo balance en la fila NEW antes de la actualización
+        SET NEW.balance = converted_balance;
+    END IF;
+END$$
+
+DELIMITER ;
+
 
 
 
@@ -790,49 +930,7 @@ INSERT INTO `subcategories` (`id`, `subcategoryname`, `balance`, `currency`, `ca
 (8, 'Utensilios', 0, 'USD', 5, 1);
 
 
---
--- Volcado de datos para la tabla `transactions`
---
 
-
--- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
--- VALUES (1, '2023-08-29', 'USD', 1, 'Compras en el supermercado', 1);
-
--- SELECT SLEEP(5); -- Pausa de 5 segundos
-
--- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
--- VALUES (2, '2023-08-28', 'USD', 1, 'Cena con amigos', 2);
-
--- SELECT SLEEP(5); -- Pausa de 5 segundos
-
--- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
--- VALUES (3, '2023-08-27', 'GBP', 1, 'Boletos de cine', 3);
-
--- SELECT SLEEP(5); -- Pausa de 5 segundos
-
--- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
--- VALUES (4, '2023-08-26', 'GBP', 1, 'Boletos de teatro', 4);
-
--- SELECT SLEEP(5); -- Pausa de 5 segundos
-
--- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
--- VALUES (5, '2023-08-25', 'USD', 1, 'Frutas frescas', 5);
-
--- SELECT SLEEP(5); -- Pausa de 5 segundos
-
--- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
--- VALUES (6, '2023-08-24', 'USD', 1, 'Viaje en taxi', 6);
-
--- SELECT SLEEP(5); -- Pausa de 5 segundos
-
--- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
--- VALUES (7, '2023-08-23', 'GBP', 1, 'Comida rápida', 7);
-
--- SELECT SLEEP(5); -- Pausa de 5 segundos
-
-
--- INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `subcategorie_id`)
--- VALUES (8, '2023-08-22', 'USD', 1, 'Compra de útiles', 8);
 
 
 
@@ -848,224 +946,3 @@ INSERT INTO `transactions` (`id`, `date`, `currency`, `amount`, `descripcion`, `
 (8, '2023-08-22', 'USD', 10, 'Compra de útiles', 8);
 
 
-
-
-
--- -- Desactivar claves foráneas para permitir la eliminación de tablas
--- SET FOREIGN_KEY_CHECKS = 0;
-
--- -- Eliminar todas las tablas
--- DROP TABLE IF EXISTS `transactions`;
--- DROP TABLE IF EXISTS `subcategories`;
--- DROP TABLE IF EXISTS `categories`;
--- DROP TABLE IF EXISTS `accounts`;
--- DROP TABLE IF EXISTS `users`;
--- DROP TABLE IF EXISTS `types`;
--- DROP TABLE IF EXISTS `currency_conversion`;
-
--- -- Reactivar claves foráneas después de eliminar tablas
--- SET FOREIGN_KEY_CHECKS = 1;
-
-
--- Insert into 'users' table
--- INSERT INTO `users` (`username`, `email`, `country`, `phone`, `currency`, `balance`, `password`, `authorization`)
--- VALUES
--- ('user1', 'user1@example.com', 'Country 1', '123456789', 'USD', 0, 'password1', 1234),
--- ('user2', 'user2@example.com', 'Country 2', '987654321', 'USD', 0, 'password2', 5678),
--- ('user3', 'user3@example.com', 'Country 3', '555555555', 'USD', 0, 'password3', 4321),
--- ('user4', 'user4@example.com', 'Country 4', '111111111', 'USD', 0, 'password4', 9876),
--- ('user5', 'user5@example.com', 'Country 5', '222222222', 'USD', 0, 'password5', 3456),
--- ('user6', 'user6@example.com', 'Country 6', '333333333', 'USD', 0, 'password6', 7890),
--- ('user7', 'user7@example.com', 'Country 7', '444444444', 'USD', 0, 'password7', 2345),
--- ('user8', 'user8@example.com', 'Country 8', '555555555', 'USD', 0, 'password8', 6543),
--- ('user9', 'user9@example.com', 'Country 9', '666666666', 'USD', 0, 'password9', 8765),
--- ('user10', 'user10@example.com', 'Country 10', '777777777', 'USD', 0, 'password10', 5432),
--- ('user11', 'user11@example.com', 'Country 11', '888888888', 'USD', 0, 'password11', 1235),
--- ('user12', 'user12@example.com', 'Country 12', '999999999', 'USD', 0, 'password12', 5678),
--- ('user13', 'user13@example.com', 'Country 13', '123123123', 'USD', 0, 'password13', 8765),
--- ('user14', 'user14@example.com', 'Country 14', '456456456', 'USD', 0, 'password14', 4321),
--- ('user15', 'user15@example.com', 'Country 15', '789789789', 'USD', 0, 'password15', 1234),
--- ('user16', 'user16@example.com', 'Country 16', '987987987', 'USD', 0, 'password16', 5678),
--- ('user17', 'user17@example.com', 'Country 17', '654654654', 'USD', 0, 'password17', 4321),
--- ('user18', 'user18@example.com', 'Country 18', '321321321', 'USD', 0, 'password18', 5678),
--- ('user19', 'user19@example.com', 'Country 19', '111222333', 'USD', 0, 'password19', 1234),
--- ('user20', 'user20@example.com', 'Country 20', '444555666', 'USD', 0, 'password20', 5678);
-
-
--- -- Insert into 'accounts' table
--- INSERT INTO `accounts` (`accountname`, `description`, `currency`, `balance`, `user_id`) 
--- VALUES
--- ('Account 1', 'Description for Account 1', 'USD', 0, 1),
--- ('Account 2', 'Description for Account 2', 'USD', 0, 1),
--- ('Account 3', 'Description for Account 3', 'USD', 0, 1),
--- ('Account 4', 'Description for Account 4', 'USD', 0, 2),
--- ('Account 5', 'Description for Account 5', 'USD', 0, 2),
--- ('Account 6', 'Description for Account 6', 'USD', 0, 2),
--- ('Account 7', 'Description for Account 7', 'USD', 0, 3),
--- ('Account 8', 'Description for Account 8', 'USD', 0, 3),
--- ('Account 9', 'Description for Account 9', 'USD', 0, 3),
--- ('Account 10', 'Description for Account 10', 'USD', 0, 4),
--- ('Account 11', 'Description for Account 11', 'USD', 0, 4),
--- ('Account 12', 'Description for Account 12', 'USD', 0, 4),
--- ('Account 13', 'Description for Account 13', 'USD', 0, 5),
--- ('Account 14', 'Description for Account 14', 'USD', 0, 5),
--- ('Account 15', 'Description for Account 15', 'USD', 0, 5),
--- ('Account 16', 'Description for Account 16', 'USD', 0, 6),
--- ('Account 17', 'Description for Account 17', 'USD', 0, 6),
--- ('Account 18', 'Description for Account 18', 'USD', 0, 6),
--- ('Account 19', 'Description for Account 19', 'USD', 0, 7),
--- ('Account 20', 'Description for Account 20', 'USD', 0, 7),
--- ('Account 21', 'Description for Account 21', 'USD', 0, 7),
--- ('Account 22', 'Description for Account 22', 'USD', 0, 8),
--- ('Account 23', 'Description for Account 23', 'USD', 0, 8),
--- ('Account 24', 'Description for Account 24', 'USD', 0, 8),
--- ('Account 25', 'Description for Account 25', 'USD', 0, 9),
--- ('Account 26', 'Description for Account 26', 'USD', 0, 9),
--- ('Account 27', 'Description for Account 27', 'USD', 0, 9),
--- ('Account 28', 'Description for Account 28', 'USD', 0, 10),
--- ('Account 29', 'Description for Account 29', 'USD', 0, 10),
--- ('Account 30', 'Description for Account 30', 'USD', 0, 10);
-
-
--- -- Insert into 'categories' table
--- INSERT INTO `categories` (`categoriename`, `balance`, `currency`, `account_id`) 
--- VALUES
--- ('Category 1', 0, 'USD', 1),
--- ('Category 2', 0, 'USD', 1),
--- ('Category 3', 0, 'USD', 1),
--- ('Category 4', 0, 'USD', 2),
--- ('Category 5', 0, 'USD', 2),
--- ('Category 6', 0, 'USD', 2),
--- ('Category 7', 0, 'USD', 3),
--- ('Category 8', 0, 'USD', 3),
--- ('Category 9', 0, 'USD', 3),
--- ('Category 10', 0, 'USD', 4),
--- ('Category 11', 0, 'USD', 4),
--- ('Category 12', 0, 'USD', 4),
--- ('Category 13', 0, 'USD', 5),
--- ('Category 14', 0, 'USD', 5),
--- ('Category 15', 0, 'USD', 5),
--- ('Category 16', 0, 'USD', 6),
--- ('Category 17', 0, 'USD', 6),
--- ('Category 18', 0, 'USD', 6),
--- ('Category 19', 0, 'USD', 7),
--- ('Category 20', 0, 'USD', 7),
--- ('Category 21', 0, 'USD', 7),
--- ('Category 22', 0, 'USD', 8),
--- ('Category 23', 0, 'USD', 8),
--- ('Category 24', 0, 'USD', 8),
--- ('Category 25', 0, 'USD', 9),
--- ('Category 26', 0, 'USD', 9),
--- ('Category 27', 0, 'USD', 9),
--- ('Category 28', 0, 'USD', 10),
--- ('Category 29', 0, 'USD', 10),
--- ('Category 30', 0, 'USD', 10),
--- ('Category 31', 0, 'USD', 11),
--- ('Category 32', 0, 'USD', 11),
--- ('Category 33', 0, 'USD', 11),
--- ('Category 34', 0, 'USD', 12),
--- ('Category 35', 0, 'USD', 12),
--- ('Category 36', 0, 'USD', 12),
--- ('Category 37', 0, 'USD', 13),
--- ('Category 38', 0, 'USD', 13),
--- ('Category 39', 0, 'USD', 13),
--- ('Category 40', 0, 'USD', 14);
-
-
--- -- Insert into 'subcategories' table
--- INSERT INTO `subcategories` (`subcategoryname`, `balance`, `currency`, `categorie_id`, `type_id`) 
--- VALUES
--- ('Subcategory 1', 0, 'USD', 1, 1),
--- ('Subcategory 2', 0, 'USD', 1, 2),
--- ('Subcategory 3', 0, 'USD', 1, 1),
--- ('Subcategory 4', 0, 'USD', 2, 1),
--- ('Subcategory 5', 0, 'USD', 2, 2),
--- ('Subcategory 6', 0, 'USD', 2, 1),
--- ('Subcategory 7', 0, 'USD', 3, 1),
--- ('Subcategory 8', 0, 'USD', 3, 2),
--- ('Subcategory 9', 0, 'USD', 3, 1),
--- ('Subcategory 10', 0, 'USD', 4, 1),
--- ('Subcategory 11', 0, 'USD', 4, 2),
--- ('Subcategory 12', 0, 'USD', 4, 1),
--- ('Subcategory 13', 0, 'USD', 5, 1),
--- ('Subcategory 14', 0, 'USD', 5, 2),
--- ('Subcategory 15', 0, 'USD', 5, 1),
--- ('Subcategory 16', 0, 'USD', 6, 1),
--- ('Subcategory 17', 0, 'USD', 6, 2),
--- ('Subcategory 18', 0, 'USD', 6, 1),
--- ('Subcategory 19', 0, 'USD', 7, 1),
--- ('Subcategory 20', 0, 'USD', 7, 2),
--- ('Subcategory 21', 0, 'USD', 7, 1),
--- ('Subcategory 22', 0, 'USD', 8, 1),
--- ('Subcategory 23', 0, 'USD', 8, 2),
--- ('Subcategory 24', 0, 'USD', 8, 1),
--- ('Subcategory 25', 0, 'USD', 9, 1),
--- ('Subcategory 26', 0, 'USD', 9, 2),
--- ('Subcategory 27', 0, 'USD', 9, 1),
--- ('Subcategory 28', 0, 'USD', 10, 1),
--- ('Subcategory 29', 0, 'USD', 10, 2),
--- ('Subcategory 30', 0, 'USD', 10, 1),
--- ('Subcategory 31', 0, 'USD', 11, 1),
--- ('Subcategory 32', 0, 'USD', 11, 2),
--- ('Subcategory 33', 0, 'USD', 11, 1),
--- ('Subcategory 34', 0, 'USD', 12, 1),
--- ('Subcategory 35', 0, 'USD', 12, 2),
--- ('Subcategory 36', 0, 'USD', 12, 1),
--- ('Subcategory 37', 0, 'USD', 13, 1),
--- ('Subcategory 38', 0, 'USD', 13, 2),
--- ('Subcategory 39', 0, 'USD', 13, 1),
--- ('Subcategory 40', 0, 'USD', 14, 1),
--- ('Subcategory 41', 0, 'USD', 14, 2),
--- ('Subcategory 42', 0, 'USD', 14, 1),
--- ('Subcategory 43', 0, 'USD', 15, 1),
--- ('Subcategory 44', 0, 'USD', 15, 2),
--- ('Subcategory 45', 0, 'USD', 15, 1),
--- ('Subcategory 46', 0, 'USD', 16, 1),
--- ('Subcategory 47', 0, 'USD', 16, 2),
--- ('Subcategory 48', 0, 'USD', 16, 1),
--- ('Subcategory 49', 0, 'USD', 17, 1),
--- ('Subcategory 50', 0, 'USD', 17, 2);
-
--- -- Insert into 'transactions' table
--- INSERT INTO `transactions` (`date`, `currency`, `amount`, `descripcion`, `subcategorie_id`) 
--- VALUES
--- ('2023-08-01', 'USD', 100, 'Transaction 1', 1),
--- ('2023-08-02', 'COP', 50000, 'Transaction 2', 2),
--- ('2023-08-03', 'GBP', 75, 'Transaction 3', 3),
--- ('2023-08-04', 'BTC', 0.01, 'Transaction 4', 4),
--- ('2023-08-05', 'USD', 75, 'Transaction 5', 5),
--- ('2023-08-06', 'COP', 25000, 'Transaction 6', 6),
--- ('2023-08-07', 'GBP', 100, 'Transaction 7', 7),
--- ('2023-08-08', 'USD', 50, 'Transaction 8', 8),
--- ('2023-08-09', 'COP', 40000, 'Transaction 9', 9),
--- ('2023-08-10', 'BTC', 0.02, 'Transaction 10', 10),
--- ('2023-08-11', 'GBP', 150, 'Transaction 11', 11),
--- ('2023-08-12', 'USD', 100, 'Transaction 12', 12),
--- ('2023-08-13', 'COP', 30000, 'Transaction 13', 13),
--- ('2023-08-14', 'BTC', 0.03, 'Transaction 14', 14),
--- ('2023-08-15', 'USD', 75, 'Transaction 15', 15),
--- ('2023-08-16', 'COP', 20000, 'Transaction 16', 16),
--- ('2023-08-17', 'GBP', 50, 'Transaction 17', 17),
--- ('2023-08-18', 'BTC', 0.015, 'Transaction 18', 18),
--- ('2023-08-19', 'USD', 50, 'Transaction 19', 19),
--- ('2023-08-20', 'COP', 35000, 'Transaction 20', 20),
--- ('2023-08-21', 'GBP', 100, 'Transaction 21', 1),
--- ('2023-08-22', 'USD', 75, 'Transaction 22', 2),
--- ('2023-08-23', 'COP', 45000, 'Transaction 23', 3),
--- ('2023-08-24', 'BTC', 0.025, 'Transaction 24', 4),
--- ('2023-08-25', 'USD', 100, 'Transaction 25', 5),
--- ('2023-08-26', 'GBP', 125, 'Transaction 26', 6),
--- ('2023-08-27', 'COP', 30000, 'Transaction 27', 7),
--- ('2023-08-28', 'USD', 50, 'Transaction 28', 8),
--- ('2023-08-29', 'COP', 40000, 'Transaction 29', 9),
--- ('2023-08-30', 'BTC', 0.02, 'Transaction 30', 10),
--- ('2023-08-31', 'USD', 75, 'Transaction 31', 11),
--- ('2023-09-01', 'COP', 55000, 'Transaction 32', 12),
--- ('2023-09-02', 'GBP', 150, 'Transaction 33', 13),
--- ('2023-09-03', 'BTC', 0.035, 'Transaction 34', 14),
--- ('2023-09-04', 'USD', 75, 'Transaction 35', 15),
--- ('2023-09-05', 'COP', 20000, 'Transaction 36', 16),
--- ('2023-09-06', 'GBP', 100, 'Transaction 37', 17),
--- ('2023-09-07', 'USD', 50, 'Transaction 38', 18),
--- ('2023-09-08', 'COP', 35000, 'Transaction 39', 19),
--- ('2023-09-09', 'BTC', 0.015, 'Transaction 40', 20);
